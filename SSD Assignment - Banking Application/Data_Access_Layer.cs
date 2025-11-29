@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
+using SSD_Assignment___Banking_Application;
 
 namespace Banking_Application
 {
@@ -14,11 +15,13 @@ namespace Banking_Application
         public static String databaseName = "Banking Database.db";
         private static Data_Access_Layer instance = new Data_Access_Layer();
         private EncryptionHelper encryptionHelper;
+        private AuditLogger auditLogger;
 
         private Data_Access_Layer()
         {
             accounts = new List<Bank_Account>();
             encryptionHelper = EncryptionHelper.GetInstance();
+            auditLogger = AuditLogger.GetInstance();
         }
 
         public static Data_Access_Layer getInstance()
@@ -71,10 +74,8 @@ namespace Banking_Application
                 {
                     connection.Open();
                     var command = connection.CreateCommand();
-                    command.CommandText = "SELECT * FROM Bank_Accounts WHERE 1 = @alwaysTrue";
-                    command.Parameters.AddWithValue("@alwaysTrue", 1);
+                    command.CommandText = "SELECT * FROM Bank_Accounts";
                     SqliteDataReader dr = command.ExecuteReader();
-
 
                     while (dr.Read())
                     {
@@ -84,13 +85,11 @@ namespace Banking_Application
                         {
                             Current_Account ca = new Current_Account();
                             ca.accountNo = dr.GetString(0);
-
                             ca.name = encryptionHelper.DecryptString(dr.GetString(1));
                             ca.address_line_1 = encryptionHelper.DecryptString(dr.GetString(2));
                             ca.address_line_2 = encryptionHelper.DecryptString(dr.GetString(3));
                             ca.address_line_3 = encryptionHelper.DecryptString(dr.GetString(4));
                             ca.town = encryptionHelper.DecryptString(dr.GetString(5));
-
                             ca.balance = dr.GetDouble(6);
                             ca.overdraftAmount = dr.GetDouble(8);
                             accounts.Add(ca);
@@ -99,13 +98,11 @@ namespace Banking_Application
                         {
                             Savings_Account sa = new Savings_Account();
                             sa.accountNo = dr.GetString(0);
-
                             sa.name = encryptionHelper.DecryptString(dr.GetString(1));
                             sa.address_line_1 = encryptionHelper.DecryptString(dr.GetString(2));
                             sa.address_line_2 = encryptionHelper.DecryptString(dr.GetString(3));
                             sa.address_line_3 = encryptionHelper.DecryptString(dr.GetString(4));
                             sa.town = encryptionHelper.DecryptString(dr.GetString(5));
-
                             sa.balance = dr.GetDouble(6);
                             sa.interestRate = dr.GetDouble(9);
                             accounts.Add(sa);
@@ -115,7 +112,7 @@ namespace Banking_Application
             }
         }
 
-        public String addBankAccount(Bank_Account ba)
+        public String addBankAccount(Bank_Account ba, string tellerName)
         {
             if (ba.GetType() == typeof(Current_Account))
                 ba = (Current_Account)ba;
@@ -165,22 +162,28 @@ namespace Banking_Application
                 command.ExecuteNonQuery();
             }
 
+            auditLogger.LogAccountCreation(tellerName, ba.accountNo, ba.name);
+
             return ba.accountNo;
         }
 
-        public Bank_Account findBankAccountByAccNo(String accNo)
+        public Bank_Account findBankAccountByAccNo(String accNo, string tellerName, bool logQuery = false)
         {
             foreach (Bank_Account ba in accounts)
             {
                 if (ba.accountNo.Equals(accNo))
                 {
+                    if (logQuery)
+                    {
+                        auditLogger.LogBalanceQuery(tellerName, ba.accountNo, ba.name);
+                    }
                     return ba;
                 }
             }
             return null;
         }
 
-        public bool closeBankAccount(String accNo)
+        public bool closeBankAccount(String accNo, string tellerName)
         {
             Bank_Account toRemove = null;
             foreach (Bank_Account ba in accounts)
@@ -196,6 +199,8 @@ namespace Banking_Application
                 return false;
             else
             {
+                auditLogger.LogAccountClosure(tellerName, toRemove.accountNo, toRemove.name);
+
                 accounts.Remove(toRemove);
 
                 using (var connection = getDatabaseConnection())
@@ -211,7 +216,7 @@ namespace Banking_Application
             }
         }
 
-        public bool lodge(String accNo, double amountToLodge)
+        public bool lodge(String accNo, double amountToLodge, string tellerName, string reason = null)
         {
             Bank_Account toLodgeTo = null;
             foreach (Bank_Account ba in accounts)
@@ -238,11 +243,13 @@ namespace Banking_Application
                     command.ExecuteNonQuery();
                 }
 
+                auditLogger.LogLodgement(tellerName, toLodgeTo.accountNo, toLodgeTo.name, amountToLodge, reason);
+
                 return true;
             }
         }
 
-        public bool withdraw(String accNo, double amountToWithdraw)
+        public bool withdraw(String accNo, double amountToWithdraw, string tellerName, string reason = null)
         {
             Bank_Account toWithdrawFrom = null;
             bool result = false;
@@ -270,9 +277,11 @@ namespace Banking_Application
                     command.ExecuteNonQuery();
                 }
 
+                auditLogger.LogWithdrawal(tellerName, toWithdrawFrom.accountNo, toWithdrawFrom.name, amountToWithdraw, reason);
+
                 return true;
             }
         }
     }
-}
 
+}
