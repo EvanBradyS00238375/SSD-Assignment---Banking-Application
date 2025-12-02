@@ -6,20 +6,54 @@ namespace Banking_Application
 {
     public class Program
     {
-        private static string currentTellerName = "";
+        private static AuthenticationManager authManager;
 
         public static void Main(string[] args)
         {
-            Console.WriteLine("***SSD Banking Application***");
-            Console.WriteLine("Please enter your name:");
-            currentTellerName = Console.ReadLine();
+            Console.WriteLine("***SSD BANKING APPLICATION***");
+            Console.WriteLine("Active Directory Authentication Required");
+            Console.WriteLine("");
 
-            if (string.IsNullOrEmpty(currentTellerName))
+            authManager = new AuthenticationManager();
+
+            bool authenticated = false;
+            int loginAttempts = 0;
+            const int MAX_LOGIN_ATTEMPTS = 3;
+
+            while (!authenticated && loginAttempts < MAX_LOGIN_ATTEMPTS)
             {
-                currentTellerName = "Unknown Teller";
+                Console.Write("Username: ");
+                string username = Console.ReadLine();
+
+                Console.Write("Password: ");
+                string password = ReadPassword();
+                Console.WriteLine();
+                Console.WriteLine("");
+
+                authenticated = authManager.AuthenticateUser(username, password);
+
+                if (!authenticated)
+                {
+                    loginAttempts++;
+                    int remainingAttempts = MAX_LOGIN_ATTEMPTS - loginAttempts;
+
+                    if (remainingAttempts > 0)
+                    {
+                        Console.WriteLine($"Login attempts remaining: {remainingAttempts}");
+                        Console.WriteLine("");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Maximum login attempts exceeded. Application will now exit.");
+                        Console.WriteLine("Press any key to exit...");
+                        Console.ReadKey();
+                        Environment.Exit(1);
+                    }
+                }
             }
 
-            Console.WriteLine($"Welcome, {currentTellerName}!");
+            Console.WriteLine("");
+            Console.WriteLine($"Welcome, {authManager.CurrentUsername}!");
             Console.WriteLine("");
 
             Data_Access_Layer dal = Data_Access_Layer.getInstance();
@@ -65,6 +99,31 @@ namespace Banking_Application
                 }
 
             } while (running != false);
+
+            Console.WriteLine("Thank you for using SSD Banking Application.");
+        }
+        private static string ReadPassword()
+        {
+            string password = "";
+            ConsoleKeyInfo key;
+
+            do
+            {
+                key = Console.ReadKey(true);
+
+                if (key.Key == ConsoleKey.Backspace && password.Length > 0)
+                {
+                    password = password.Substring(0, password.Length - 1);
+                    Console.Write("\b \b");
+                }
+                else if (!char.IsControl(key.KeyChar))
+                {
+                    password += key.KeyChar;
+                    Console.Write("*");
+                }
+            } while (key.Key != ConsoleKey.Enter);
+
+            return password;
         }
 
         private static void HandleAccountCreation(Data_Access_Layer dal)
@@ -216,7 +275,7 @@ namespace Banking_Application
                 ba = new Savings_Account(name, addressLine1, addressLine2, addressLine3, town, balance, interestRate);
             }
 
-            String accNo = dal.addBankAccount(ba, currentTellerName);
+            String accNo = dal.addBankAccount(ba, authManager.CurrentUsername);
             Console.WriteLine("New Account Number Is: " + accNo);
         }
 
@@ -225,7 +284,7 @@ namespace Banking_Application
             Console.WriteLine("Enter Account Number: ");
             String accNo = Console.ReadLine();
 
-            Bank_Account ba = dal.findBankAccountByAccNo(accNo, currentTellerName, false);
+            Bank_Account ba = dal.findBankAccountByAccNo(accNo, authManager.CurrentUsername, false);
 
             if (ba is null)
             {
@@ -242,22 +301,31 @@ namespace Banking_Application
                     Console.WriteLine("Proceed With Deletion (Y/N)?");
                     ans = Console.ReadLine();
 
-                    switch (ans)
+                    if (ans.Equals("Y", StringComparison.OrdinalIgnoreCase))
                     {
-                        case "Y":
-                        case "y":
-                            dal.closeBankAccount(accNo, currentTellerName);
+                        bool adminApproved = authManager.RequestAdministratorApproval(accNo, ba.name);
+
+                        if (adminApproved)
+                        {
+                            dal.closeBankAccount(accNo, authManager.CurrentUsername);
                             Console.WriteLine("Account closed successfully.");
-                            break;
-                        case "N":
-                        case "n":
-                            Console.WriteLine("Account closure cancelled.");
-                            break;
-                        default:
-                            Console.WriteLine("INVALID OPTION CHOSEN - PLEASE TRY AGAIN");
-                            break;
+                        }
+                        else
+                        {
+                            Console.WriteLine("Account closure cancelled - Administrator approval denied.");
+                        }
+                        break;
                     }
-                } while (!(ans.Equals("Y") || ans.Equals("y") || ans.Equals("N") || ans.Equals("n")));
+                    else if (ans.Equals("N", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine("Account closure cancelled.");
+                        break;
+                    }
+                    else
+                    {
+                        Console.WriteLine("INVALID OPTION CHOSEN - PLEASE TRY AGAIN");
+                    }
+                } while (true);
             }
         }
 
@@ -266,7 +334,7 @@ namespace Banking_Application
             Console.WriteLine("Enter Account Number: ");
             String accNo = Console.ReadLine();
 
-            Bank_Account ba = dal.findBankAccountByAccNo(accNo, currentTellerName, true); 
+            Bank_Account ba = dal.findBankAccountByAccNo(accNo, authManager.CurrentUsername, true);
 
             if (ba is null)
             {
@@ -283,7 +351,7 @@ namespace Banking_Application
             Console.WriteLine("Enter Account Number: ");
             String accNo = Console.ReadLine();
 
-            Bank_Account ba = dal.findBankAccountByAccNo(accNo, currentTellerName, false);
+            Bank_Account ba = dal.findBankAccountByAccNo(accNo, authManager.CurrentUsername, false);
 
             if (ba is null)
             {
@@ -312,6 +380,7 @@ namespace Banking_Application
                     }
 
                 } while (amountToLodge < 0);
+
                 string reason = null;
                 if (amountToLodge > 10000.00)
                 {
@@ -325,7 +394,7 @@ namespace Banking_Application
                     }
                 }
 
-                dal.lodge(accNo, amountToLodge, currentTellerName, reason);
+                dal.lodge(accNo, amountToLodge, authManager.CurrentUsername, reason);
                 Console.WriteLine($"Successfully lodged €{amountToLodge:F2}");
             }
         }
@@ -335,7 +404,7 @@ namespace Banking_Application
             Console.WriteLine("Enter Account Number: ");
             String accNo = Console.ReadLine();
 
-            Bank_Account ba = dal.findBankAccountByAccNo(accNo, currentTellerName, false);
+            Bank_Account ba = dal.findBankAccountByAccNo(accNo, authManager.CurrentUsername, false);
 
             if (ba is null)
             {
@@ -378,7 +447,7 @@ namespace Banking_Application
                     }
                 }
 
-                bool withdrawalOK = dal.withdraw(accNo, amountToWithdraw, currentTellerName, reason);
+                bool withdrawalOK = dal.withdraw(accNo, amountToWithdraw, authManager.CurrentUsername, reason);
 
                 if (withdrawalOK == false)
                 {

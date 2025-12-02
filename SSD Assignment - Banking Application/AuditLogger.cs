@@ -9,7 +9,7 @@ using System.Security.Principal;
 using System.Reflection;
 using System.Security.Cryptography;
 
-namespace SSD_Assignment___Banking_Application
+namespace Banking_Application
 {
     public class AuditLogger
     {
@@ -255,6 +255,89 @@ namespace SSD_Assignment___Banking_Application
                 Console.WriteLine("Error writing to Event Log: " + ex.Message);
                 Console.WriteLine("Attempted to log: " + message);
             }
+        }
+
+        public void LogSuccessfulLogin(string username, bool isBankTeller, bool isAdministrator)
+        {
+            StringBuilder logMessage = new StringBuilder();
+            logMessage.AppendLine($"Login Attempt: SUCCESS");
+            logMessage.AppendLine($"Username: {username}");
+            logMessage.AppendLine($"Bank Teller: {isBankTeller}");
+            logMessage.AppendLine($"Administrator: {isAdministrator}");
+            logMessage.AppendLine($"Login DateTime: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+
+            string macAddress = GetMACAddress();
+            logMessage.AppendLine($"Device MAC Address: {macAddress}");
+
+            string windowsSID = GetWindowsSID();
+            logMessage.AppendLine($"Windows SID: {windowsSID}");
+
+            logMessage.AppendLine(GetApplicationMetadata());
+
+            WriteToEventLog(logMessage.ToString(), EventLogEntryType.SuccessAudit);
+        }
+
+        public void LogFailedLogin(string username, string reason)
+        {
+            StringBuilder logMessage = new StringBuilder();
+            logMessage.AppendLine($"Login Attempt: FAILED");
+            logMessage.AppendLine($"Username: {username}");
+            logMessage.AppendLine($"Failure Reason: {reason}");
+            logMessage.AppendLine($"Login DateTime: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+
+            string macAddress = GetMACAddress();
+            logMessage.AppendLine($"Device MAC Address: {macAddress}");
+
+            string windowsSID = GetWindowsSID();
+            logMessage.AppendLine($"Windows SID: {windowsSID}");
+
+            logMessage.AppendLine(GetApplicationMetadata());
+
+            WriteToEventLog(logMessage.ToString(), EventLogEntryType.FailureAudit);
+        }
+
+        public void LogSuccessfulAdminApproval(string tellerUsername, string adminUsername, string accountNo, string accountHolderName)
+        {
+            StringBuilder logMessage = new StringBuilder();
+            logMessage.AppendLine($"Administrator Approval: GRANTED");
+            logMessage.AppendLine($"Requesting Teller: {tellerUsername}");
+            logMessage.AppendLine($"Approving Administrator: {adminUsername}");
+            logMessage.AppendLine($"Account Number: {accountNo}");
+            logMessage.AppendLine($"Account Holder: {accountHolderName}");
+            logMessage.AppendLine($"Action: Account Deletion");
+            logMessage.AppendLine($"Approval DateTime: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+
+            string macAddress = GetMACAddress();
+            logMessage.AppendLine($"Device MAC Address: {macAddress}");
+
+            string windowsSID = GetWindowsSID();
+            logMessage.AppendLine($"Windows SID: {windowsSID}");
+
+            logMessage.AppendLine(GetApplicationMetadata());
+
+            WriteToEventLog(logMessage.ToString(), EventLogEntryType.SuccessAudit);
+        }
+
+        public void LogFailedAdminApproval(string tellerUsername, string adminUsername, string accountNo, string reason)
+        {
+            StringBuilder logMessage = new StringBuilder();
+            logMessage.AppendLine($"Administrator Approval: DENIED");
+            logMessage.AppendLine($"Requesting Teller: {tellerUsername}");
+            logMessage.AppendLine($"Attempted Administrator: {adminUsername}");
+            logMessage.AppendLine($"Account Number: {accountNo}");
+            logMessage.AppendLine($"Failure Reason: {reason}");
+            logMessage.AppendLine($"Action: Account Deletion");
+            logMessage.AppendLine($"Approval DateTime: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+
+            string macAddress = GetMACAddress();
+            logMessage.AppendLine($"Device MAC Address: {macAddress}");
+
+            string windowsSID = GetWindowsSID();
+            logMessage.AppendLine($"Windows SID: {windowsSID}");
+
+            logMessage.AppendLine(GetApplicationMetadata());
+
+            WriteToEventLog(logMessage.ToString(), EventLogEntryType.FailureAudit);
         }
     }
 }
